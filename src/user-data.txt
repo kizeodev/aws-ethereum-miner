@@ -1,0 +1,28 @@
+#!/bin/bash -x
+cd /tmp
+AZID=$(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone-id | cut -d- -f1)
+INSTTYPE=$(curl -s http://169.254.169.254/latest/meta-data/instance-type)
+wget -O ethminer.tar.gz https://ethminer-cuda.s3.amazonaws.com/0.19.0/${EthminerTarGz}
+tar xvfz ethminer.tar.gz
+cd bin
+case ${!AZID:0:1} in
+  u) PREFERRED_SERVER="us-solo-eth";;
+  e) PREFERRED_SERVER="solo-eth";;
+  a) PREFERRED_SERVER="asia-solo-eth";;
+  *) PREFERRED_SERVER="us-solo-eth";;
+esac
+cat > runner.sh << __EOF__
+#!/bin/bash -x
+while (true); do
+  ./ethminer ${EthminerArgs} \
+    -P stratum1+tcp://${EthWallet}.${AWS::Region}@${!PREFERRED_SERVER}.2miners.com:6060 \
+    -P stratum1+tcp://${EthWallet}.${AWS::Region}@us-solo-eth.2miners.com:6060 \
+    -P stratum1+tcp://${EthWallet}.${AWS::Region}@us-solo-eth.2miners.com:6060 \
+    -P stratum1+tcp://${EthWallet}.${AWS::Region}@solo-eth.2miners.com:6060 \
+    -P stratum1+tcp://${EthWallet}.${AWS::Region}@asia-solo-eth.2miners.com:6060 \
+  >> /tmp/ethminer.log 2>&1
+  sleep 1
+done
+__EOF__
+chmod +x runner.sh
+nohup ./runner.sh &
